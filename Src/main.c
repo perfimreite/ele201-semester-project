@@ -29,6 +29,17 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
+typedef struct {
+  uint32_t start;
+  uint32_t end;
+} Interval;
+
+typedef struct {
+  Interval intervals[MAX_INTERVALS];
+  uint32_t count;
+  uint32_t index;
+} Recording;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -47,7 +58,11 @@ TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
 
-bool keys[KEYS_COUNT];
+Recording recordings[KEYS_COUNT] = {0};
+bool recording_active[KEYS_COUNT] = {0};
+
+GPIO_TypeDef *ports[KEYS_COUNT] = {IN_C4_GPIO_Port, IN_D4_GPIO_Port, IN_E4_GPIO_Port, IN_F4_GPIO_Port, IN_G4_GPIO_Port, IN_A4_GPIO_Port, IN_B4_GPIO_Port};
+uint16_t pins[KEYS_COUNT] = {IN_C4_Pin, IN_D4_Pin, IN_E4_Pin, IN_F4_Pin, IN_G4_Pin, IN_A4_Pin, IN_B4_Pin};
 uint16_t notes[KEYS_COUNT] = {NOTE_C4, NOTE_D4, NOTE_E4, NOTE_F4, NOTE_G4, NOTE_A4, NOTE_B4};
 
 uint16_t arr = 0;
@@ -106,6 +121,13 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
+  for (int i = 0; i < KEYS_COUNT; i++) {
+    recordings[i] = (Recording){0};
+  }
+
+  uint32_t record_start = 0; 
+  uint32_t play_start = 0; 
+
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
   /* USER CODE END 2 */
@@ -118,39 +140,120 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    keys[0] = HAL_GPIO_ReadPin(IN_C4_GPIO_Port, IN_C4_Pin);
-    keys[1] = HAL_GPIO_ReadPin(IN_D4_GPIO_Port, IN_D4_Pin);
-    keys[2] = HAL_GPIO_ReadPin(IN_E4_GPIO_Port, IN_E4_Pin);
-    keys[3] = HAL_GPIO_ReadPin(IN_F4_GPIO_Port, IN_F4_Pin);
-    keys[4] = HAL_GPIO_ReadPin(IN_G4_GPIO_Port, IN_G4_Pin);
-    keys[5] = HAL_GPIO_ReadPin(IN_A4_GPIO_Port, IN_A4_Pin);
-    keys[6] = HAL_GPIO_ReadPin(IN_B4_GPIO_Port, IN_B4_Pin);
+    // Check if recording should start
+    if (/*HAL_GPIO_ReadPin(IN_RECORD_GPIO_Port, IN_RECORD_Pin) &&*/ record_start == 0 && play_start == 0) {
+      for (int i = 0; i < KEYS_COUNT; i++) {
+        recordings[i] = (Recording){0};
+        recording_active[i] = false;
+      }
+      record_start = HAL_GetTick();
+    }
 
-    bool key_was_pressed = false;
+    // *** RECORD ***
+    if (record_start > 0) {
+      uint32_t elapsed = HAL_GetTick() - record_start;
 
-    // Play noise for the first key pressed
-    // IF multiple keys are pressed the ones on earlier index have 'play priority'
-    for (int i = 0; i < KEYS_COUNT && !key_was_pressed; i++) {
-      if (keys[i]) {
-        compute_arr_and_pwm(&arr, &pwm, notes[i]);
-        __HAL_TIM_SET_AUTORELOAD(&htim1, arr);
-        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm);
-        
-        key_was_pressed = true;
+      for (int i = 0; i < KEYS_COUNT; i++) {
+        Recording *r = &recordings[i];
+
+        bool on = HAL_GPIO_ReadPin(ports[i], pins[i]);
+
+        if (r->count < MAX_INTERVALS) {
+          if (!recording_active[i] && on) {
+            r->intervals[r->count].start = elapsed;
+            recording_active[i] = true;
+          } else if (recording_active[i] && !on) {
+            r->intervals[r->count].end = elapsed;
+            r->count += 1;
+            recording_active[i] = false;
+          }
+        }
+      }
+
+      // End recording
+      if (elapsed >= RECORD_TIME) {
+        for (int i = 0; i < KEYS_COUNT; i++) {
+          Recording *r = &recordings[i];
+
+          if (recording_active[i] && r->count < MAX_INTERVALS) {
+            r->intervals[r->count].end = RECORD_TIME;
+            r->count += 1;
+          }
+
+          recording_active[i] = false;
+          r->index = 0;
+        }
+
+        record_start = 0;
+        play_start = HAL_GetTick();
+      }
+    } 
+    // *** PLAY RECORDING ***
+    else if (play_start > 0) {
+      uint32_t elapsed = HAL_GetTick() - play_start;
+
+      // Play notes
+      // If multiple keys are pressed the ones on earlier index have 'play priority'
+      bool key_was_pressed = false;
+      for (int i = 0; i < KEYS_COUNT && !key_was_pressed; i++) {
+        Recording *r = &recordings[i];
+
+        // Update recording index for the current key
+        while (r->index < r->count && elapsed >= r->intervals[r->index].end) {
+          r->index += 1;
+        }
+
+        if (r->index < r->count && elapsed >= r->intervals[r->index].start && elapsed < r->intervals[r->index].end) {
+           compute_arr_and_pwm(&arr, &pwm, notes[i]);
+          __HAL_TIM_SET_AUTORELOAD(&htim1, arr);
+          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm);
+
+          key_was_pressed = true;
+        }
+      }
+
+      // Play no noise if none of the keys were pressed
+      if (!key_was_pressed) {
+         compute_arr_and_pwm(&arr, &pwm, NOTE_NULL);
+         __HAL_TIM_SET_AUTORELOAD(&htim1, arr);
+         __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm);
+      }
+
+      // End playing
+      if (elapsed >= RECORD_TIME) {
+         // Reset recordings
+        for (int i = 0; i < KEYS_COUNT; i++) {
+          recordings[i] = (Recording){0};
+        }
+
+        play_start = 0;
       }
     }
+    // *** NORMAL ***
+     else {
+      // Play notes
+      // If multiple keys are pressed the ones on earlier index have 'play priority'
+      bool key_was_pressed = false;
+      for (int i = 0; i < KEYS_COUNT && !key_was_pressed; i++) {
+        bool on = HAL_GPIO_ReadPin(ports[i], pins[i]);
+        if (on) {
+          compute_arr_and_pwm(&arr, &pwm, notes[i]);
+          __HAL_TIM_SET_AUTORELOAD(&htim1, arr);
+          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm);
 
-    // Play no noise if none of the keys were pressed
-    if (!key_was_pressed) {
-      compute_arr_and_pwm(&arr, &pwm, NOTE_NULL);
-      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm);
-    }
+          key_was_pressed = true;
+        }
+      }
 
-    // Reset all the keys
-    for (int i = 0; i < KEYS_COUNT; i++) {
-      keys[i] = false;
+      // Play no noise if none of the keys were pressed
+      if (!key_was_pressed) {
+         compute_arr_and_pwm(&arr, &pwm, NOTE_NULL);
+         __HAL_TIM_SET_AUTORELOAD(&htim1, arr);
+         __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm);
+      }
     }
   }
+
   /* USER CODE END 3 */
 }
 
@@ -333,7 +436,11 @@ static void MX_GPIO_Init(void)
 
 void compute_arr_and_pwm(uint16_t *arr, uint16_t *pwm, uint16_t note)
 {
-  *arr = (uint16_t)((TIM1_CLOCK_HZ / ((htim1.Init.Prescaler + 1.0f) * note)) - 1);
+  if (note == 0) {
+    *pwm = 0;
+    return;
+  }
+  *arr = note == (uint16_t)((TIM1_CLOCK_HZ / ((htim1.Init.Prescaler + 1.0f) * note)) - 1);
   *pwm = ((*arr) + 1) / 2;
 }
 

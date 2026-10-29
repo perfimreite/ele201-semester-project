@@ -79,6 +79,9 @@ void Error_Handler(void);
 /* USER CODE BEGIN Private defines */
 
 #define KEYS_COUNT 7
+#define RECORD_TIME 5000
+#define MAX_INTERVALS 64
+#define TIM1_CLOCK_HZ (108 * 1e6) // 108 MHz
 
 #define NOTE_NULL 0
 #define NOTE_C4 262
@@ -89,8 +92,6 @@ void Error_Handler(void);
 #define NOTE_A4 440
 #define NOTE_B4 494
 #define NOTE_C5 523
-
-#define TIM1_CLOCK_HZ (108 * 1e6) // 108 MHz
 
 /* USER CODE END Private defines */
 
