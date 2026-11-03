@@ -1,0 +1,2 @@
+../mongoose/mongoose_glue.c:10:6:glue_get_button_input	1
+../mongoose/mongoose_glue.c:13:6:glue_set_button_input	1
