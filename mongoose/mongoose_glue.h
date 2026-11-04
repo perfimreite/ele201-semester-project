@@ -110,7 +110,13 @@ void glue_update_state(void);
 // Firmware Glue
 
 struct button_input {
-
+  int timestamp_B4;
+  int timestamp_A4;
+  int timestamp_G4;
+  int timestamp_F4;
+  int timestamp_D4;
+  int timestamp_E4;
+  int timestamp_C4;
 };
 void glue_get_button_input(struct button_input *);
 void glue_set_button_input(struct button_input *);

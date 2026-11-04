@@ -167,6 +167,13 @@ struct custom_api_handler {
 static struct custom_api_handler *s_custom_handlers;
 
 struct attribute s_button_input_attributes[] = {
+  {"timestamp_B4", "int", NULL, offsetof(struct button_input, timestamp_B4), 0, false},
+  {"timestamp_A4", "int", NULL, offsetof(struct button_input, timestamp_A4), 0, false},
+  {"timestamp_G4", "int", NULL, offsetof(struct button_input, timestamp_G4), 0, false},
+  {"timestamp_F4", "int", NULL, offsetof(struct button_input, timestamp_F4), 0, false},
+  {"timestamp_D4", "int", NULL, offsetof(struct button_input, timestamp_D4), 0, false},
+  {"timestamp_E4", "int", NULL, offsetof(struct button_input, timestamp_E4), 0, false},
+  {"timestamp_C4", "int", NULL, offsetof(struct button_input, timestamp_C4), 0, false},
   {NULL, NULL, NULL, 0, 0, false}
 };
 

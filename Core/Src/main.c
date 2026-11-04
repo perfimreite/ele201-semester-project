@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "mongoose_glue.h"
 #include <stdbool.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -90,7 +91,10 @@ const osThreadAttr_t defaultTask_attributes = {
 /* USER CODE BEGIN PV */
 Recording recordings[KEYS_COUNT] = {0};
 bool recording_active[KEYS_COUNT] = {0};
+bool prev_key_states[KEYS_COUNT] = {0};
 
+// Array to store individual note timestamps for the dashboard
+uint32_t note_timestamps[KEYS_COUNT] = {0};
 uint32_t record_start = 0;
 uint32_t play_start = 0;
 
@@ -113,6 +117,21 @@ static void MX_TIM1_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
+
+/* USER CODE BEGIN PFP */
+void my_get_button_input(struct button_input *data)
+{
+    // Map your note_timestamps array indices directly to your struct fields
+    // 0 = C4, 1 = D4, 2 = E4, 3 = F4, 4 = G4, 5 = A4, 6 = B4
+    data->timestamp_C4 = (int)note_timestamps[0]/1000;
+    data->timestamp_D4 = (int)note_timestamps[1]/1000;
+    data->timestamp_E4 = (int)note_timestamps[2]/1000;
+    data->timestamp_F4 = (int)note_timestamps[3]/1000;
+    data->timestamp_G4 = (int)note_timestamps[4]/1000;
+    data->timestamp_A4 = (int)note_timestamps[5]/1000;
+    data->timestamp_B4 = (int)note_timestamps[6]/1000;
+}
+/* USER CODE END PFP */
 
 
 /* USER CODE END PFP */
@@ -578,107 +597,111 @@ void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
   mongoose_init();
+  mongoose_set_http_handlers("button_input",my_get_button_input);
+
   for (;;) {
-    mongoose_poll();
+	  mongoose_poll();
 
-    // Check if recording should start
-  	     if (HAL_GPIO_ReadPin(IN_RECORD_GPIO_Port, IN_RECORD_Pin) && record_start == 0 && play_start == 0) {
-  	       for (int i = 0; i < KEYS_COUNT; i++) {
-  	         recordings[i] = (Recording){0};
-  	         recording_active[i] = false;
-  	       }
-  	       record_start = HAL_GetTick();
-  	     }
+	      // --- 1. ALWAYS DETECT NOTE PRESSES & TIMESTAMPS ---
+	      uint32_t current_time = HAL_GetTick();
+	      for (int i = 0; i < KEYS_COUNT; i++) {
+	        bool on = (HAL_GPIO_ReadPin(ports[i], pins[i]) == GPIO_PIN_SET);
 
-  	     // *** RECORD ***
-  	     if (record_start > 0) {
-  	       uint32_t elapsed = HAL_GetTick() - record_start;
+	        // Detect Rising Edge (Note just pressed down)
+	        if (on && !prev_key_states[i]) {
+	          note_timestamps[i] = current_time; // Updates dashboard timestamp for this note
+	        }
+	        prev_key_states[i] = on;
+	      }
 
-  	       for (int i = 0; i < KEYS_COUNT; i++) {
-  	         Recording *r = &recordings[i];
+	      // --- 2. CHECK RECORDING START ---
+	      if (HAL_GPIO_ReadPin(IN_RECORD_GPIO_Port, IN_RECORD_Pin) && record_start == 0 && play_start == 0) {
+	        for (int i = 0; i < KEYS_COUNT; i++) {
+	          recordings[i] = (Recording){0};
+	          recording_active[i] = false;
+	        }
+	        record_start = HAL_GetTick();
+	      }
 
-  	         bool on = HAL_GPIO_ReadPin(ports[i], pins[i]);
-  	         if (r->count < MAX_INTERVALS) {
-  	           if (!recording_active[i] && on) {
-  	             r->intervals[r->count].start = elapsed;
-  	             recording_active[i] = true;
-  	           } else if (recording_active[i] && !on) {
-  	             r->intervals[r->count].end = elapsed;
-  	             r->count += 1;
-  	             recording_active[i] = false;
-  	           }
-  	         }
-  	       }
+	      // --- 3. *** RECORD *** ---
+	      if (record_start > 0) {
+	        uint32_t elapsed = HAL_GetTick() - record_start;
 
-  	       // End recording
-  	       if (elapsed >= RECORD_TIME) {
-  	         for (int i = 0; i < KEYS_COUNT; i++) {
-  	           Recording *r = &recordings[i];
+	        for (int i = 0; i < KEYS_COUNT; i++) {
+	          Recording *r = &recordings[i];
 
-  	           if (recording_active[i] && r->count < MAX_INTERVALS) {
-  	             r->intervals[r->count].end = RECORD_TIME;
-  	             r->count += 1;
-  	           }
+	          bool on = prev_key_states[i];
+	          if (r->count < MAX_INTERVALS) {
+	            if (!recording_active[i] && on) {
+	              r->intervals[r->count].start = elapsed;
+	              recording_active[i] = true;
+	            } else if (recording_active[i] && !on) {
+	              r->intervals[r->count].end = elapsed;
+	              r->count += 1;
+	              recording_active[i] = false;
+	            }
+	          }
+	        }
 
-  	           recording_active[i] = false;
-  	           r->index = 0;
-  	         }
+	        // End recording
+	        if (elapsed >= RECORD_TIME) {
+	          for (int i = 0; i < KEYS_COUNT; i++) {
+	            Recording *r = &recordings[i];
 
-  	         record_start = 0;
-  	         play_start = HAL_GetTick();
-  	       }
-  	     }
-  	     // *** PLAY RECORDING ***
-  	     else if (play_start > 0) {
-  	       uint32_t elapsed = HAL_GetTick() - play_start;
+	            if (recording_active[i] && r->count < MAX_INTERVALS) {
+	              r->intervals[r->count].end = RECORD_TIME;
+	              r->count += 1;
+	            }
 
-  	       // Play notes
-  	       // If multiple keys are pressed the ones on earlier index have 'play priority'
-  	       bool key_was_pressed = false;
-  	       for (int i = 0; i < KEYS_COUNT && !key_was_pressed; i++) {
-  	         Recording *r = &recordings[i];
+	            recording_active[i] = false;
+	            r->index = 0;
+	          }
 
-  	         // Update recording index for the current key
-  	         while (r->index < r->count && elapsed >= r->intervals[r->index].end) {
-  	           r->index += 1;
-  	         }
+	          record_start = 0;
+	          play_start = HAL_GetTick();
+	        }
+	      }
+	      // --- 4. *** PLAY RECORDING *** ---
+	      else if (play_start > 0) {
+	        uint32_t elapsed = HAL_GetTick() - play_start;
 
-  	         if (r->index < r->count && elapsed >= r->intervals[r->index].start && elapsed < r->intervals[r->index].end) {
-  	           play_sound(&arr, &pwm, notes[i]);
-  	           key_was_pressed = true;
-  	         }
-  	       }
+	        bool key_was_pressed = false;
+	        for (int i = 0; i < KEYS_COUNT && !key_was_pressed; i++) {
+	          Recording *r = &recordings[i];
 
-  	       // Play no noise if none of the keys were pressed
-  	       if (!key_was_pressed) {
-  	         play_sound(&arr, &pwm, NOTE_NULL);
-  	       }
+	          while (r->index < r->count && elapsed >= r->intervals[r->index].end) {
+	            r->index += 1;
+	          }
 
-  	       // End playing
-  	       if (elapsed >= RECORD_TIME) {
-  	         play_start = 0;
-  	       }
-  	     }
-  	     // *** NORMAL ***
-  	      else {
-  	       // Play notes
-  	       // If multiple keys are pressed the ones on earlier index have 'play priority'
-  	       bool key_was_pressed = false;
-  	       for (int i = 0; i < KEYS_COUNT && !key_was_pressed; i++) {
-  	         bool on = HAL_GPIO_ReadPin(ports[i], pins[i]);
-  	         if (on) {
-  	           play_sound(&arr, &pwm, notes[i]);
-  	           key_was_pressed = true;
-  	         }
-  	       }
+	          if (r->index < r->count && elapsed >= r->intervals[r->index].start && elapsed < r->intervals[r->index].end) {
+	            play_sound(&arr, &pwm, notes[i]);
+	            key_was_pressed = true;
+	          }
+	        }
 
-  	       // Play no noise if none of the keys were pressed
-  	       if (!key_was_pressed) {
-  	         play_sound(&arr, &pwm, NOTE_NULL);
-  	       }
-  	     }
+	        if (!key_was_pressed) {
+	          play_sound(&arr, &pwm, NOTE_NULL);
+	        }
 
+	        if (elapsed >= RECORD_TIME) {
+	          play_start = 0;
+	        }
+	      }
+	      // --- 5. *** NORMAL (Live Play) *** ---
+	      else {
+	        bool key_was_pressed = false;
 
+	        for (int i = 0; i < KEYS_COUNT && !key_was_pressed; i++) {
+	          if (prev_key_states[i]) {
+	            play_sound(&arr, &pwm, notes[i]);
+	            key_was_pressed = true;
+	          }
+	        }
+
+	        if (!key_was_pressed) {
+	          play_sound(&arr, &pwm, NOTE_NULL);
+	        }
+	      }
 
 
     osDelay(1);

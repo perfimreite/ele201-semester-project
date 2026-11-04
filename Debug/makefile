@@ -65,8 +65,8 @@ all: main-build
 main-build: f767.elf secondary-outputs
 
 # Tool invocations
-f767.elf f767.map: $(OBJS) $(USER_OBJS) C:\Users\ebrun\Documents\ELE201\Semesterprosjekt\STM32F767ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "f767.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Users\ebrun\Documents\ELE201\Semesterprosjekt\STM32F767ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="f767.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+f767.elf f767.map: $(OBJS) $(USER_OBJS) C:\Users\ebrun\Documents\GitHub\ele201-semester-project\STM32F767ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "f767.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Users\ebrun\Documents\GitHub\ele201-semester-project\STM32F767ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="f767.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

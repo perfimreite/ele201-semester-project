@@ -6,7 +6,7 @@
 
 #include "mongoose_glue.h"
 // Do not edit! See https://mongoose.ws/docs/guides/web-ui-builder/#custom-api-handlers
-static struct button_input s_button_input = {};
+static struct button_input s_button_input = {0, 0, 0, 0, 0, 0, 0};
 void glue_get_button_input(struct button_input *data) {
   *data = s_button_input;  // Sync with your device
 }
