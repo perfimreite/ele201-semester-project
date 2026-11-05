@@ -63,6 +63,8 @@ void Error_Handler(void);
 #define IN_C4_GPIO_Port GPIOA
 #define IN_D4_Pin GPIO_PIN_0
 #define IN_D4_GPIO_Port GPIOB
+#define LD1_Pin GPIO_PIN_13
+#define LD1_GPIO_Port GPIOF
 #define PWM_Pin GPIO_PIN_9
 #define PWM_GPIO_Port GPIOE
 #define IN_RECORD_Pin GPIO_PIN_12

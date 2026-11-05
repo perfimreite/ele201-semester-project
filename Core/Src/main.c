@@ -133,9 +133,6 @@ void my_get_button_input(struct button_input *data)
 }
 /* USER CODE END PFP */
 
-
-/* USER CODE END PFP */
-
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
@@ -512,12 +509,16 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, IN_D4_Pin|GPIO_PIN_14|GPIO_PIN_7, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(IN_E4_GPIO_Port, IN_E4_Pin, GPIO_PIN_RESET);
@@ -534,6 +535,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(IN_D4_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LD1_Pin */
+  GPIO_InitStruct.Pin = LD1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LD1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : IN_RECORD_Pin IN_F4_Pin IN_G4_Pin */
   GPIO_InitStruct.Pin = IN_RECORD_Pin|IN_F4_Pin|IN_G4_Pin;
@@ -620,7 +628,9 @@ void StartDefaultTask(void *argument)
 	          recordings[i] = (Recording){0};
 	          recording_active[i] = false;
 	        }
+
 	        record_start = HAL_GetTick();
+	        HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_SET);
 	      }
 
 	      // --- 3. *** RECORD *** ---
@@ -658,7 +668,12 @@ void StartDefaultTask(void *argument)
 	          }
 
 	          record_start = 0;
+	          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+	          HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_RESET);
+	          osDelay(1000);
+
 	          play_start = HAL_GetTick();
+	          HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_SET);
 	        }
 	      }
 	      // --- 4. *** PLAY RECORDING *** ---
@@ -685,10 +700,11 @@ void StartDefaultTask(void *argument)
 
 	        if (elapsed >= RECORD_TIME) {
 	          play_start = 0;
+	          HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_RESET);
 	        }
 	      }
 	      // --- 5. *** NORMAL (Live Play) *** ---
-	      else {
+	      if (play_start == 0) {
 	        bool key_was_pressed = false;
 
 	        for (int i = 0; i < KEYS_COUNT && !key_was_pressed; i++) {
