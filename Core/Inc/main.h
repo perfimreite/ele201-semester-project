@@ -94,7 +94,6 @@ void Error_Handler(void);
 #define NOTE_G4 392
 #define NOTE_A4 440
 #define NOTE_B4 494
-#define NOTE_C5 523
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

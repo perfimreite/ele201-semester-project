@@ -91,10 +91,10 @@ const osThreadAttr_t defaultTask_attributes = {
 /* USER CODE BEGIN PV */
 Recording recordings[KEYS_COUNT] = {0};
 bool recording_active[KEYS_COUNT] = {0};
-bool prev_key_states[KEYS_COUNT] = {0};
 
-// Array to store individual note timestamps for the dashboard
+bool prev_key_states[KEYS_COUNT] = {0};
 uint32_t note_timestamps[KEYS_COUNT] = {0};
+
 uint32_t record_start = 0;
 uint32_t play_start = 0;
 
@@ -605,7 +605,7 @@ void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
   mongoose_init();
-  mongoose_set_http_handlers("button_input",my_get_button_input);
+  mongoose_set_http_handlers("button_input", my_get_button_input);
 
   for (;;) {
 	  mongoose_poll();
@@ -633,7 +633,7 @@ void StartDefaultTask(void *argument)
 	        HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_SET);
 	      }
 
-	      // --- 3. *** RECORD *** ---
+	      // --- 3. RECORD ---
 	      if (record_start > 0) {
 	        uint32_t elapsed = HAL_GetTick() - record_start;
 
@@ -676,7 +676,7 @@ void StartDefaultTask(void *argument)
 	          HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_SET);
 	        }
 	      }
-	      // --- 4. *** PLAY RECORDING *** ---
+	      // --- 4. PLAY RECORDING ---
 	      else if (play_start > 0) {
 	        uint32_t elapsed = HAL_GetTick() - play_start;
 
@@ -703,7 +703,7 @@ void StartDefaultTask(void *argument)
 	          HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_RESET);
 	        }
 	      }
-	      // --- 5. *** NORMAL (Live Play) *** ---
+	      // --- 5. NORMAL *** ---
 	      if (play_start == 0) {
 	        bool key_was_pressed = false;
 
@@ -718,7 +718,6 @@ void StartDefaultTask(void *argument)
 	          play_sound(&arr, &pwm, NOTE_NULL);
 	        }
 	      }
-
 
     osDelay(1);
   }
